@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Herramientas de Cifrado Clásico</title>
+  <style>
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    margin: 0;
+    padding: 20px;
+    color: #f1f5f9;
+  }
+
+  h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #e0f2fe;
+    letter-spacing: 1px;
+  }
+
+  .card {
+    background: #ffffff;
+    color: #1f2937;
+    padding: 25px;
+    margin: 15px auto;
+    max-width: 720px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  }
+
+  label {
+    font-weight: 600;
+    margin-top: 15px;
+    display: block;
+  }
+
+  textarea, input, select {
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    font-size: 14px;
+  }
+
+  textarea {
+    min-height: 90px;
+    resize: vertical;
+  }
+
+  select {
+    background-color: #f8fafc;
+  }
+
+  button {
+    cursor: pointer;
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 15px;
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(37, 99, 235, 0.4);
+  }
+
+  #result {
+    background: #f1f5f9;
+  }
+</style>
+</head>
+<body>
+
+<h1>Cifrado y Descifrado Clásico</h1>
+
+<div class="card">
+  <label for="algorithm">Algoritmo de cifrado</label>
+  <select id="algorithm" onchange="updateUI()">
+    <option value="caesar">Cifrado César (desplazamiento)</option>
+    <option value="atbash">Cifrado Atbash (sin clave)</option>
+    <option value="vigenere">Cifrado Vigenère (palabra clave)</option>
+    <option value="railfence">Rail Fence (número de rieles)</option>
+    <option value="columnar">Transposición Columnar (palabra clave)</option>
+  </select>
+
+  <label for="text">Texto plano / cifrado</label>
+  <textarea id="text" placeholder="Ingrese el texto aquí..."></textarea>
+
+  <div id="keyContainer">
+    <label id="keyLabel" for="key">Clave / parámetro</label>
+    <input id="key" placeholder="Ejemplo: 3 o CLAVE" />
+  </div>
+
+  <button onclick="encrypt()">🔐 Cifrar</button>
+  <button onclick="decrypt()">🔓 Descifrar</button>
+
+  <div style="display:flex; gap:10px; margin-top:10px;">
+    <button onclick="copyResult()">📋 Copiar resultado</button>
+    <button onclick="clearAll()" style="background:linear-gradient(135deg,#dc2626,#991b1b)">🗑️ Borrar</button>
+  </div>
+
+  <label for="result">Resultado</label>
+  <textarea id="result" readonly placeholder="Aquí se mostrará el resultado..."></textarea>
+</div>
+
+<script>
+function caesar(text, shift) {
+  return text.replace(/[a-z]/gi, c => String.fromCharCode((c.charCodeAt(0) - (c <= 'Z' ? 65 : 97) + shift) % 26 + (c <= 'Z' ? 65 : 97)));
+}
+
+function atbash(text) {
+  return text.replace(/[a-z]/gi, c => String.fromCharCode((c <= 'Z' ? 90 : 122) - (c.charCodeAt(0) - (c <= 'Z' ? 65 : 97))));
+}
+
+function vigenere(text, key, decrypt=false) {
+  let result = '', j = 0;
+  for (let i=0;i<text.length;i++) {
+    let c = text[i];
+    if (/[a-z]/i.test(c)) {
+      let base = c <= 'Z' ? 65 : 97;
+      let k = key[j++ % key.length].toUpperCase().charCodeAt(0) - 65;
+      if (decrypt) k = 26 - k;
+      result += String.fromCharCode((c.charCodeAt(0)-base+k)%26+base);
+    } else result += c;
+  }
+  return result;
+}
+
+function railFence(text, rails) {
+  let fence = Array.from({length: rails}, () => []);
+  let rail = 0, dir = 1;
+  for (let c of text) {
+    fence[rail].push(c);
+    rail += dir;
+    if (rail === 0 || rail === rails-1) dir *= -1;
+  }
+  return fence.flat().join('');
+}
+
+function columnarEncrypt(text, key) {
+  let cols = key.length;
+  let rows = Math.ceil(text.length / cols);
+  let grid = Array.from({length: rows}, (_, r) => text.slice(r*cols, r*cols+cols).padEnd(cols));
+  let order = key.split('').map((c,i)=>({c,i})).sort((a,b)=>a.c.localeCompare(b.c));
+  return order.map(o => grid.map(r=>r[o.i]).join('')).join('');
+}
+
+function columnarDecrypt(text, key) {
+  let cols = key.length;
+  let rows = Math.ceil(text.length / cols);
+  let order = key.split('').map((c,i)=>({c,i})).sort((a,b)=>a.c.localeCompare(b.c));
+  let grid = Array.from({length: rows}, ()=>Array(cols));
+  let pos = 0;
+  order.forEach(o => {
+    for (let r=0;r<rows;r++) grid[r][o.i] = text[pos++];
+  });
+  return grid.flat().join('').trimEnd();
+}
+
+function encrypt() {
+  let t = text.value, k = key.value, a = algorithm.value;
+  if (a==='caesar') result.value = caesar(t, parseInt(k)||3);
+  if (a==='atbash') result.value = atbash(t);
+  if (a==='vigenere') result.value = vigenere(t, k||'A');
+  if (a==='railfence') result.value = railFence(t, parseInt(k)||2);
+  if (a==='columnar') result.value = columnarEncrypt(t, k||'CLAVE');
+}
+
+function decrypt() {
+  let t = text.value, k = key.value, a = algorithm.value;
+  if (a==='caesar') result.value = caesar(t, 26-(parseInt(k)||3));
+  if (a==='atbash') result.value = atbash(t);
+  if (a==='vigenere') result.value = vigenere(t, k||'A', true);
+  if (a==='railfence') result.value = 'Descifrado Rail Fence no implementado';
+  if (a==='columnar') result.value = columnarDecrypt(t, k||'CLAVE');
+}
+function updateUI() {
+  const algo = algorithm.value;
+  const keyBox = document.getElementById('keyContainer');
+  const keyLabel = document.getElementById('keyLabel');
+  const keyInput = document.getElementById('key');
+
+  if (algo === 'atbash') {
+    keyBox.style.display = 'none';
+  } else {
+    keyBox.style.display = 'block';
+  }
+
+  if (algo === 'caesar') {
+    keyLabel.textContent = 'Clave / parámetro (desplazamiento)';
+    keyInput.placeholder = 'Ejemplo: 3';
+  }
+  if (algo === 'vigenere') {
+    keyLabel.textContent = 'Palabra clave';
+    keyInput.placeholder = 'Ejemplo: CLAVE';
+  }
+  if (algo === 'railfence') {
+    keyLabel.textContent = 'Número de rieles';
+    keyInput.placeholder = 'Ejemplo: 3';
+  }
+  if (algo === 'columnar') {
+    keyLabel.textContent = 'Palabra clave';
+    keyInput.placeholder = 'Ejemplo: SEGURIDAD';
+  }
+}
+
+updateUI();
+
+function copyResult() {
+  const res = document.getElementById('result');
+  res.select();
+  document.execCommand('copy');
+  alert('Resultado copiado al portapapeles');
+}
+
+function clearAll() {
+  document.getElementById('text').value = '';
+  document.getElementById('key').value = '';
+  document.getElementById('result').value = '';
+}
+</script>
+
+</body>
+</html>
